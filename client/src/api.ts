@@ -14,9 +14,9 @@ async function buildApiError(response: Response, fallbackMessage: string): Promi
       .filter(Boolean)
       .join(" | ");
 
-    return new Error(parts || fallbackMessage);
+    return new Error(parts || `${fallbackMessage} (HTTP ${response.status})`);
   } catch {
-    return new Error(fallbackMessage);
+    return new Error(`${fallbackMessage} (HTTP ${response.status})`);
   }
 }
 
@@ -108,6 +108,10 @@ export async function validateVaultPath(vaultPath: string): Promise<ValidateVaul
   });
 
   if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error("后端暂不支持路径自检接口 /export/validate（404）。请重启并更新后端服务到最新版本。你仍可直接点击“导入到 Obsidian”。");
+    }
+
     throw await buildApiError(response, "Failed to validate vault path");
   }
 
