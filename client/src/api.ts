@@ -1,10 +1,26 @@
 const API_BASE = "http://localhost:3001";
 
+export type EntityType = "style" | "artist" | "period" | "museum" | "note";
+
+export interface Relationship {
+  type: "direct" | "indirect" | "many-to-many";
+  from: {
+    type: EntityType;
+    name: string;
+  };
+  to: {
+    type: EntityType;
+    name: string;
+  };
+  description?: string;
+}
+
 export interface ExtractionResult {
   styles: string[];
   artists: string[];
   periods: string[];
   museums: string[];
+  relationships: Relationship[];
 }
 
 export interface GeneratedFiles {
@@ -50,4 +66,13 @@ export function downloadFile(filename: string, content: string) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+export function getRelationshipLabel(type: Relationship["type"]): string {
+  const labels: Record<Relationship["type"], string> = {
+    direct: "直接关联",
+    indirect: "间接关联",
+    "many-to-many": "多对多关联",
+  };
+  return labels[type];
 }

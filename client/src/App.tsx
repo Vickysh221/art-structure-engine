@@ -22,26 +22,33 @@ function App() {
     }
   };
 
+  const handleReset = () => {
+    setResult(null);
+    setError(null);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold text-gray-900">Art Structure Engine</h1>
-          <p className="mt-1 text-sm text-gray-600">将艺术文本转换为 Obsidian 笔记结构</p>
-        </div>
-      </header>
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#07080B]">
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <header className="mb-8">
+          <h1 className="text-2xl text-white">Art Structure Engine</h1>
+          <p className="text-sm text-white/60 mt-1">将艺术文本转换为 Obsidian 笔记结构</p>
+        </header>
+
         {error && (
-          <div className="max-w-3xl mx-auto mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700">{error}</p>
+          <div className="mb-5 p-4 rounded-2xl border border-white/10 bg-white/5">
+            <p className="text-white/80">{error}</p>
           </div>
         )}
-        {!result ? (
-          <TextInput onSubmit={handleSubmit} loading={loading} />
-        ) : (
-          <ResultViewer result={result} />
-        )}
-      </main>
+
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+          {!result ? (
+            <TextInput onSubmit={handleSubmit} loading={loading} />
+          ) : (
+            <ResultViewer result={result} onReset={handleReset} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

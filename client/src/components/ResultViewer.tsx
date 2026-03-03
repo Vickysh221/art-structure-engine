@@ -1,11 +1,12 @@
 import type { ExtractResponse } from "../api";
-import { downloadFile } from "../api";
+import { downloadFile, getRelationshipLabel } from "../api";
 
 interface ResultViewerProps {
   result: ExtractResponse;
+  onReset: () => void;
 }
 
-export function ResultViewer({ result }: ResultViewerProps) {
+export function ResultViewer({ result, onReset }: ResultViewerProps) {
   const handleDownloadAll = () => {
     downloadFile(result.note.filename, result.note.content);
     result.files.entities.forEach((entity) => {
@@ -17,100 +18,145 @@ export function ResultViewer({ result }: ResultViewerProps) {
     navigator.clipboard.writeText(result.note.content);
   };
 
+  const getRelationshipTypeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      direct: "bg-white/10 border border-white/10",
+      indirect: "bg-white/5 border border-white/10",
+      "many-to-many": "bg-white/10 border border-white/10",
+    };
+    return colors[type] || "bg-white/5 border border-white/10";
+  };
+
   return (
-    <div className="w-full max-w-4xl mx-auto p-6 space-y-6">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-800">抽取结果</h2>
-        <div className="flex gap-3">
+        <h2 className="text-xl text-white">抽取结果</h2>
+        <div className="flex gap-2">
           <button
             onClick={handleCopyNote}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            className="px-4 py-2 border border-white/10 bg-white/5 text-white/80 rounded-2xl hover:bg-white/10 transition text-sm"
           >
             复制笔记
           </button>
           <button
             onClick={handleDownloadAll}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="px-4 py-2 bg-white text-black rounded-2xl font-medium hover:opacity-90 transition text-sm"
           >
             下载全部
           </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-gray-800">结构信息</h3>
-        <div className="grid grid-cols-2 gap-4">
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
+        <h3 className="text-lg text-white">结构信息</h3>
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-sm font-medium text-gray-600">风格</p>
+            <p className="text-sm text-white/60">风格</p>
             <ul className="mt-1 space-y-1">
               {result.extraction.styles.map((style, i) => (
-                <li key={i} className="text-sm text-gray-800">{style}</li>
+                <li key={i} className="text-sm text-white/80">{style}</li>
               ))}
             </ul>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-600">艺术家</p>
+            <p className="text-sm text-white/60">艺术家</p>
             <ul className="mt-1 space-y-1">
               {result.extraction.artists.map((artist, i) => (
-                <li key={i} className="text-sm text-gray-800">{artist}</li>
+                <li key={i} className="text-sm text-white/80">{artist}</li>
               ))}
             </ul>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-600">时期</p>
+            <p className="text-sm text-white/60">时期</p>
             <ul className="mt-1 space-y-1">
               {result.extraction.periods.map((period, i) => (
-                <li key={i} className="text-sm text-gray-800">{period}</li>
+                <li key={i} className="text-sm text-white/80">{period}</li>
               ))}
             </ul>
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-600">展馆</p>
+            <p className="text-sm text-white/60">展馆</p>
             <ul className="mt-1 space-y-1">
               {result.extraction.museums.map((museum, i) => (
-                <li key={i} className="text-sm text-gray-800">{museum}</li>
+                <li key={i} className="text-sm text-white/80">{museum}</li>
               ))}
             </ul>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">生成的笔记</h3>
+      {result.extraction.relationships.length > 0 && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+          <h3 className="text-lg text-white">实体关系</h3>
+          <div className="space-y-2">
+            {result.extraction.relationships.map((rel, i) => (
+              <div key={i} className={`p-3 rounded-xl ${getRelationshipTypeColor(rel.type)}`}>
+                <div className="flex items-start gap-2">
+                  <span className="px-2.5 py-1 text-xs bg-white/10 rounded-full text-white/70 border border-white/10">
+                    {getRelationshipLabel(rel.type)}
+                  </span>
+                  <div className="flex-1">
+                    <p className="text-sm text-white/80">
+                      <span className="text-white">{rel.from.name}</span>
+                      <span className="mx-2 text-white/40">→</span>
+                      <span className="text-white">{rel.to.name}</span>
+                    </p>
+                    {rel.description && (
+                      <p className="text-xs text-white/50 mt-1">{rel.description}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg text-white">生成的笔记</h3>
           <button
             onClick={() => downloadFile(result.note.filename, result.note.content)}
-            className="text-sm text-blue-600 hover:text-blue-800"
+            className="text-sm text-white/60 hover:text-white/80 transition"
           >
             下载
           </button>
         </div>
-        <pre className="bg-gray-50 p-4 rounded-lg text-sm overflow-auto max-h-96 whitespace-pre-wrap">
+        <pre className="bg-black/20 p-3 rounded-xl text-sm overflow-auto max-h-96 whitespace-pre-wrap text-white/75">
           {result.note.content}
         </pre>
       </div>
 
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-800">生成的实体文件</h3>
+      <div className="space-y-3">
+        <h3 className="text-lg text-white">生成的实体文件</h3>
         {result.files.entities.map((entity, i) => (
-          <div key={i} className="bg-white rounded-lg shadow p-4">
+          <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <span className="text-sm font-medium text-gray-600 mr-2">{entity.type}</span>
-                <span className="text-sm text-gray-800">{entity.filename}</span>
+                <span className="text-sm text-white/60 mr-2">{entity.type}</span>
+                <span className="text-sm text-white/80">{entity.filename}</span>
               </div>
               <button
                 onClick={() => downloadFile(entity.filename, entity.content)}
-                className="text-sm text-blue-600 hover:text-blue-800"
+                className="text-sm text-white/60 hover:text-white/80 transition"
               >
                 下载
               </button>
             </div>
-            <pre className="bg-gray-50 p-3 rounded-lg text-xs overflow-auto max-h-48 whitespace-pre-wrap">
+            <pre className="bg-black/20 p-3 rounded-xl text-xs overflow-auto max-h-48 whitespace-pre-wrap text-white/75">
               {entity.content}
             </pre>
           </div>
         ))}
+      </div>
+
+      <div className="pt-2">
+        <button
+          onClick={onReset}
+          className="w-full py-3 px-6 border border-white/10 bg-white/5 text-white/80 rounded-2xl hover:bg-white/10 transition"
+        >
+          返回输入
+        </button>
       </div>
     </div>
   );

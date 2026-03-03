@@ -1,4 +1,4 @@
-import type { ExtractionResult, GeneratedFiles, EntityType } from "./types";
+import type { ExtractionResult, GeneratedFiles, EntityType, Relationship } from "./types";
 
 function toKebabCase(str: string): string {
   return str
@@ -12,6 +12,15 @@ function generateNoteFilename(): string {
   const dateStr = now.toISOString().slice(0, 10);
   const randomStr = Math.random().toString(36).substr(2, 8);
   return `${dateStr}-${randomStr}.md`;
+}
+
+function getRelationshipLabel(type: Relationship["type"]): string {
+  const labels: Record<Relationship["type"], string> = {
+    direct: "直接关联",
+    indirect: "间接关联",
+    "many-to-many": "多对多关联",
+  };
+  return labels[type];
 }
 
 function generateNoteContent(text: string, extraction: ExtractionResult): string {
@@ -47,16 +56,29 @@ function generateNoteContent(text: string, extraction: ExtractionResult): string
     });
   }
 
+  if (extraction.relationships.length > 0) {
+    content += "\n## 实体关系\n\n";
+    extraction.relationships.forEach((rel) => {
+      content += `- **${getRelationshipLabel(rel.type)}**：`;
+      content += `[[${rel.from.name}]] → [[${rel.to.name}]]`;
+      if (rel.description) {
+        content += ` (${rel.description})`;
+      }
+      content += "\n";
+    });
+  }
+
   return content;
 }
 
 function generateEntityContent(
   name: string,
   type: Exclude<EntityType, "note">,
-  noteFilename: string
+  noteFilename: string,
+  extraction: ExtractionResult
 ): string {
   const noteLink = noteFilename.replace(".md", "");
-  return `# ${name}
+  let content = `# ${name}
 
 ## 类型
 ${type}
@@ -64,6 +86,40 @@ ${type}
 ## 关联笔记
 - [[${noteLink}]]
 `;
+
+  const relatedEntities: Array<{ type: EntityType; name: string; relType: Relationship["type"]; description?: string }> = [];
+
+  extraction.relationships.forEach((rel) => {
+    if (rel.from.name === name) {
+      relatedEntities.push({
+        type: rel.to.type,
+        name: rel.to.name,
+        relType: rel.type,
+        description: rel.description,
+      });
+    }
+    if (rel.to.name === name) {
+      relatedEntities.push({
+        type: rel.from.type,
+        name: rel.from.name,
+        relType: rel.type,
+        description: rel.description,
+      });
+    }
+  });
+
+  if (relatedEntities.length > 0) {
+    content += "\n## 关联实体\n";
+    relatedEntities.forEach((entity) => {
+      content += `- [[${entity.name}]] (${getRelationshipLabel(entity.relType)})`;
+      if (entity.description) {
+        content += ` - ${entity.description}`;
+      }
+      content += "\n";
+    });
+  }
+
+  return content;
 }
 
 export function generateMarkdownFiles(
@@ -88,7 +144,8 @@ export function generateMarkdownFiles(
       const content = generateEntityContent(
         name,
         type as Exclude<EntityType, "note">,
-        noteFilename
+        noteFilename,
+        extraction
       );
       entities.push({
         type: type as EntityType,
