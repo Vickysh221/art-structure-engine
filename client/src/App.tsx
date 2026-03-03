@@ -8,6 +8,7 @@ import "./App.css";
 function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExtractResponse | null>(null);
+  const [originalText, setOriginalText] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
 
@@ -16,6 +17,7 @@ function App() {
     setError(null);
     try {
       const data = await extractText(text);
+      setOriginalText(text);
       setResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -61,7 +63,7 @@ function App() {
           {!result ? (
             <TextInput onSubmit={handleSubmit} loading={loading} />
           ) : (
-            <ResultViewer result={result} onReset={handleReset} />
+            <ResultViewer result={result} originalText={originalText} onReset={handleReset} />
           )}
         </div>
       </div>

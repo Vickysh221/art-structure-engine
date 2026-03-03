@@ -1,12 +1,39 @@
 import type { ExtractResponse } from "../api";
-import { downloadFile, getRelationshipLabel } from "../api";
+import { downloadFile, getRelationshipLabel, exportToObsidian } from "../api";
+import { useState } from "react";
 
 interface ResultViewerProps {
   result: ExtractResponse;
+  originalText: string;
   onReset: () => void;
 }
 
-export function ResultViewer({ result, onReset }: ResultViewerProps) {
+export function ResultViewer({ result, originalText, onReset }: ResultViewerProps) {
+  const [importing, setImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+
+  const VAULT_PATH = "/Users/vickyshou/Documents/Art Thinking Vault";
+
+  const handleImportToObsidian = async () => {
+    setImporting(true);
+    setImportStatus(null);
+    try {
+      const response = await exportToObsidian(
+        originalText,
+        VAULT_PATH
+      );
+      setImportStatus(
+        `✅ 成功导入！\n笔记: ${response.exported.notePath}\n实体文件: ${response.exported.entities.length} 个`
+      );
+    } catch (error) {
+      setImportStatus(
+        `❌ 导入失败: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleDownloadAll = () => {
     downloadFile(result.files.note.filename, result.files.note.content);
     result.files.entities.forEach((entity) => {
@@ -40,12 +67,35 @@ export function ResultViewer({ result, onReset }: ResultViewerProps) {
           </button>
           <button
             onClick={handleDownloadAll}
-            className="px-4 py-2 bg-white text-black rounded-2xl font-medium hover:opacity-90 transition text-sm"
+            className="px-4 py-2 border border-white/10 bg-white/5 text-white/80 rounded-2xl hover:bg-white/10 transition text-sm"
           >
             下载全部
           </button>
+          <button
+            onClick={handleImportToObsidian}
+            disabled={importing}
+            className="px-4 py-2 bg-white text-black rounded-2xl font-medium hover:opacity-90 disabled:bg-white/5 disabled:text-white/30 disabled:cursor-not-allowed transition text-sm"
+          >
+            {importing ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-4 w-4 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                导入中...
+              </span>
+            ) : (
+              "导入到 Obsidian"
+            )}
+          </button>
         </div>
       </div>
+
+      {importStatus && (
+        <div className={`mb-5 p-4 rounded-2xl border ${importStatus.includes("✅") ? "border-white/10 bg-white/5" : "border-red-500/20 bg-red-500/5"}`}>
+          <pre className="text-sm whitespace-pre-wrap text-white/80">{importStatus}</pre>
+        </div>
+      )}
 
       <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-3">
         <h3 className="text-lg text-white">结构信息</h3>
