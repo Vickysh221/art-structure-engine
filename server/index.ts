@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { extractStructure } from "./extract";
+import { extractStructure, runConnectivityTest } from "./extract";
 import { generateMarkdownFiles } from "./markdown";
 
 const app = express();
@@ -48,17 +48,37 @@ async function upsertEntityFile(
   }
 }
 
+
+app.get("/connectivity", async (_req, res) => {
+  try {
+    const connectivity = await runConnectivityTest();
+    const allOk =
+      connectivity.inputInterface === "ok" &&
+      connectivity.processingModule === "ok" &&
+      connectivity.analysisEngine === "ok";
+
+    res.status(allOk ? 200 : 503).json({
+      status: allOk ? "ok" : "degraded",
+      connectivity,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Connectivity test failed" });
+  }
+});
+
 app.post("/extract", async (req, res) => {
   try {
     const { text } = req.body;
     if (!text) {
       return res.status(400).json({ error: "Text is required" });
     }
-
+    const connectivity = await runConnectivityTest();
     const extraction = await extractStructure(text);
     const files = generateMarkdownFiles(text, extraction);
 
     res.json({
+      connectivity,
       extraction,
       files,
     });
@@ -80,6 +100,7 @@ app.post("/export", async (req, res) => {
       return res.status(400).json({ error: "vaultPath is required" });
     }
 
+    const connectivity = await runConnectivityTest();
     const extraction = await extractStructure(text);
     const files = generateMarkdownFiles(text, extraction);
 
@@ -99,6 +120,7 @@ app.post("/export", async (req, res) => {
     );
 
     res.json({
+      connectivity,
       extraction,
       files,
       exported: {
