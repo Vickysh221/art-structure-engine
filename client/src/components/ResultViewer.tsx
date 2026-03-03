@@ -1,5 +1,5 @@
 import type { ExtractResponse } from "../api";
-import { downloadFile, getRelationshipLabel, exportToObsidian } from "../api";
+import { downloadFile, getRelationshipLabel, exportToObsidian, validateVaultPath } from "../api";
 import { useState } from "react";
 
 interface ResultViewerProps {
@@ -10,9 +10,26 @@ interface ResultViewerProps {
 
 export function ResultViewer({ result, originalText, onReset }: ResultViewerProps) {
   const [importing, setImporting] = useState(false);
+  const [checkingPath, setCheckingPath] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [pathCheckStatus, setPathCheckStatus] = useState<string | null>(null);
+  const DEFAULT_VAULT_PATH = "/Users/vickyshou/Documents/Art Thinking Vault";
+  const [vaultPath, setVaultPath] = useState(DEFAULT_VAULT_PATH);
 
-  const VAULT_PATH = "/Users/vickyshou/Documents/Art Thinking Vault";
+  const canImport = vaultPath.trim().length > 0 && !importing;
+
+  const handleValidatePath = async () => {
+    setCheckingPath(true);
+    setPathCheckStatus(null);
+    try {
+      const response = await validateVaultPath(vaultPath.trim());
+      setPathCheckStatus(`✅ 路径校验通过: ${response.message}`);
+    } catch (error) {
+      setPathCheckStatus(`❌ 路径校验失败: ${error instanceof Error ? error.message : "Unknown error"}`);
+    } finally {
+      setCheckingPath(false);
+    }
+  };
 
   const handleImportToObsidian = async () => {
     setImporting(true);
@@ -20,10 +37,13 @@ export function ResultViewer({ result, originalText, onReset }: ResultViewerProp
     try {
       const response = await exportToObsidian(
         originalText,
-        VAULT_PATH
+        vaultPath.trim()
       );
+
+      const createdCount = response.exported.entities.filter((entity) => entity.status === "created").length;
+      const updatedCount = response.exported.entities.filter((entity) => entity.status === "updated").length;
       setImportStatus(
-        `✅ 成功导入！\n笔记: ${response.exported.notePath}\n实体文件: ${response.exported.entities.length} 个`
+        `✅ 成功导入！\n笔记: ${response.exported.notePath}\n实体文件: ${response.exported.entities.length} 个（新增 ${createdCount}，更新 ${updatedCount}）`
       );
     } catch (error) {
       setImportStatus(
@@ -73,7 +93,7 @@ export function ResultViewer({ result, originalText, onReset }: ResultViewerProp
           </button>
           <button
             onClick={handleImportToObsidian}
-            disabled={importing}
+            disabled={!canImport}
             className="px-4 py-2 bg-white text-black rounded-2xl font-medium hover:opacity-90 disabled:bg-white/5 disabled:text-white/30 disabled:cursor-not-allowed transition text-sm"
           >
             {importing ? (
@@ -90,6 +110,39 @@ export function ResultViewer({ result, originalText, onReset }: ResultViewerProp
           </button>
         </div>
       </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+        <label className="text-sm text-white/60" htmlFor="vaultPath">
+          Obsidian Vault 路径
+        </label>
+        <input
+          id="vaultPath"
+          value={vaultPath}
+          onChange={(event) => {
+            setVaultPath(event.target.value);
+            setPathCheckStatus(null);
+          }}
+          placeholder="例如：/Users/yourname/Documents/MyVault"
+          className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+        />
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={handleValidatePath}
+            disabled={checkingPath || vaultPath.trim().length === 0}
+            className="px-3 py-2 border border-white/10 bg-white/5 text-white/80 rounded-xl hover:bg-white/10 transition text-xs disabled:bg-white/5 disabled:text-white/30 disabled:cursor-not-allowed"
+          >
+            {checkingPath ? "校验中..." : "导出前路径自检"}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-white/50">
+          导入会自动创建 styles / artists / periods / museums / notes 目录，并维护实体与笔记之间的双向链接。
+        </p>
+      </div>
+
+      {pathCheckStatus && (
+        <div className={`mb-5 p-4 rounded-2xl border ${pathCheckStatus.includes("✅") ? "border-white/10 bg-white/5" : "border-red-500/20 bg-red-500/5"}`}><pre className="text-sm whitespace-pre-wrap text-white/80">{pathCheckStatus}</pre></div>
+      )}
 
       {importStatus && (
         <div className={`mb-5 p-4 rounded-2xl border ${importStatus.includes("✅") ? "border-white/10 bg-white/5" : "border-red-500/20 bg-red-500/5"}`}>

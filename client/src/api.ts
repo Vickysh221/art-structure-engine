@@ -1,5 +1,25 @@
 const API_BASE = "http://localhost:3001";
 
+
+async function buildApiError(response: Response, fallbackMessage: string): Promise<Error> {
+  try {
+    const data = (await response.json()) as {
+      error?: string;
+      code?: string;
+      details?: string;
+      suggestion?: string;
+    };
+
+    const parts = [data.error, data.code ? `code=${data.code}` : undefined, data.details, data.suggestion]
+      .filter(Boolean)
+      .join(" | ");
+
+    return new Error(parts || `${fallbackMessage} (HTTP ${response.status})`);
+  } catch {
+    return new Error(`${fallbackMessage} (HTTP ${response.status})`);
+  }
+}
+
 export type EntityType = "style" | "artist" | "period" | "museum" | "note";
 
 export interface Relationship {
@@ -40,6 +60,12 @@ export interface ExtractResponse {
   files: GeneratedFiles;
 }
 
+export interface ValidateVaultPathResponse {
+  ok: boolean;
+  vaultPath: string;
+  message: string;
+}
+
 export interface ExportResponse extends ExtractResponse {
   exported: {
     vaultPath: string;
@@ -64,7 +90,29 @@ export async function extractText(text: string): Promise<ExtractResponse> {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to extract text");
+    throw await buildApiError(response, "Failed to extract text");
+  }
+
+  return response.json();
+}
+
+
+
+export async function validateVaultPath(vaultPath: string): Promise<ValidateVaultPathResponse> {
+  const response = await fetch(`${API_BASE}/export/validate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ vaultPath }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error("后端暂不支持路径自检接口 /export/validate（404）。请重启并更新后端服务到最新版本。你仍可直接点击“导入到 Obsidian”。");
+    }
+
+    throw await buildApiError(response, "Failed to validate vault path");
   }
 
   return response.json();
@@ -83,7 +131,7 @@ export async function exportToObsidian(
   });
 
   if (!response.ok) {
-    throw new Error("Failed to export to Obsidian vault");
+    throw await buildApiError(response, "Failed to export to Obsidian vault");
   }
 
   return response.json();
