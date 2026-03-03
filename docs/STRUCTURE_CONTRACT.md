@@ -71,6 +71,19 @@ style
   "styles": [],
   "artists": [],
   "periods": [],
-  "museums": []
+  "museums": [],
+  "relationships": [
+    {
+      "type": "direct",
+      "from": { "type": "artist", "name": "Jan van Eyck" },
+      "to": { "type": "style", "name": "北方文艺复兴" },
+      "description": "Jan van Eyck是北方文艺复兴艺术家的代表人物"
+    }
+  ]
 }
 ```
+
+## 连通性检测
+
+- `GET /connectivity`：检测文本输入接口、数据处理模块、分析引擎三部分是否可联通。
+- `POST /extract` 与 `POST /export`：先执行连通性检测，再执行抽取。

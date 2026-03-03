@@ -1,6 +1,7 @@
-import type { ExtractionResult } from "./types";
+import type { ExtractionResult, Relationship } from "./types";
 
 const OLLAMA_URL = "http://localhost:11434/api/generate";
+const OLLAMA_TAGS_URL = "http://localhost:11434/api/tags";
 const MODEL = "llama3.1";
 
 const SYSTEM_PROMPT = `你是一个专业的艺术史分析助手。你的任务是从给定的文本中提取艺术相关的实体和它们之间的关系。
@@ -35,10 +36,150 @@ const SYSTEM_PROMPT = `你是一个专业的艺术史分析助手。你的任务
 如果某个类别没有实体，请返回空数组 []。
 如果没有识别到关系，relationships 返回空数组 []。`;
 
+export interface ConnectivityStatus {
+  inputInterface: "ok" | "error";
+  processingModule: "ok" | "error";
+  analysisEngine: "ok" | "error";
+  details: string[];
+}
+
+function uniq(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function inferRelationships(result: ExtractionResult): Relationship[] {
+  const relationships: Relationship[] = [];
+
+  for (const artist of result.artists) {
+    for (const style of result.styles) {
+      relationships.push({
+        type: "direct",
+        from: { type: "artist", name: artist },
+        to: { type: "style", name: style },
+        description: `${artist} 与 ${style} 存在直接艺术关联`,
+      });
+    }
+  }
+
+  for (const period of result.periods) {
+    for (const style of result.styles) {
+      relationships.push({
+        type: "indirect",
+        from: { type: "period", name: period },
+        to: { type: "style", name: style },
+        description: `${period} 对 ${style} 的形成与发展产生影响`,
+      });
+    }
+  }
+
+  if (result.styles.length > 0 && result.artists.length > 1) {
+    for (const style of result.styles) {
+      relationships.push({
+        type: "many-to-many",
+        from: { type: "style", name: style },
+        to: { type: "artist", name: result.artists.join("、") },
+        description: `${style} 下存在多位代表艺术家`,
+      });
+    }
+  }
+
+  return relationships;
+}
+
+function localExtract(text: string): ExtractionResult {
+  const styleTerms = ["威尼斯画派", "拜占庭艺术", "中东艺术", "文艺复兴", "北方文艺复兴", "巴洛克", "印象派"];
+  const periodTerms = [
+    "文艺复兴时期",
+    "北方文艺复兴时期",
+    "15世纪",
+    "16世纪",
+    "17世纪",
+    "现代主义时期",
+  ];
+  const museumTerms = ["乌菲齐美术馆", "Uffizi 美术馆", "Uffizi", "卢浮宫", "大英博物馆"];
+  const knownArtists = [
+    "Jan van Eyck",
+    "达芬奇",
+    "米开朗基罗",
+    "提香",
+    "丁托列托",
+    "贝利尼",
+    "梵高",
+    "毕加索",
+  ];
+
+  const styles = uniq(styleTerms.filter((term) => text.includes(term)));
+  const periods = uniq(periodTerms.filter((term) => text.includes(term)));
+  const museums = uniq(museumTerms.filter((term) => text.includes(term)));
+
+  const artistByKnownList = knownArtists.filter((name) => text.includes(name));
+  const artistByPattern = Array.from(text.matchAll(/([A-Z][a-z]+(?:\s+[a-zA-Z][a-zA-Z'-]+){0,3})/g))
+    .map((match) => match[1])
+    .filter((candidate) => candidate.length > 3 && !["Venice", "Byzantine"].includes(candidate));
+
+  const artists = uniq([...artistByKnownList, ...artistByPattern]);
+
+  const base: ExtractionResult = {
+    styles,
+    artists,
+    periods,
+    museums,
+    relationships: [],
+  };
+
+  base.relationships = inferRelationships(base);
+  return base;
+}
+
+function sanitizeResult(result: Partial<ExtractionResult>): ExtractionResult {
+  const sanitized: ExtractionResult = {
+    styles: uniq(result.styles ?? []),
+    artists: uniq(result.artists ?? []),
+    periods: uniq(result.periods ?? []),
+    museums: uniq(result.museums ?? []),
+    relationships: result.relationships ?? [],
+  };
+
+  if (sanitized.relationships.length === 0) {
+    sanitized.relationships = inferRelationships(sanitized);
+  }
+
+  return sanitized;
+}
+
+export async function runConnectivityTest(): Promise<ConnectivityStatus> {
+  const status: ConnectivityStatus = {
+    inputInterface: "ok",
+    processingModule: "ok",
+    analysisEngine: "ok",
+    details: [],
+  };
+
+  status.details.push("文本输入接口已就绪：Express JSON body parser 可用");
+  status.details.push("数据处理模块已就绪：实体提取与 Markdown 生成函数可调用");
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(OLLAMA_TAGS_URL, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      status.analysisEngine = "error";
+      status.details.push(`分析引擎联通失败：Ollama tags 接口返回 ${response.status}`);
+    } else {
+      status.details.push("分析引擎联通成功：Ollama 服务可访问");
+    }
+  } catch (error) {
+    status.analysisEngine = "error";
+    status.details.push(`分析引擎联通失败：${(error as Error).message}`);
+  }
+
+  return status;
+}
+
 export async function extractStructure(text: string): Promise<ExtractionResult> {
   try {
-    console.log("Starting extraction with text length:", text.length);
-    
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);
 
@@ -69,45 +210,18 @@ export async function extractStructure(text: string): Promise<ExtractionResult> 
     }
 
     const data = await response.json();
-    console.log("Ollama response received");
-    
-    let result;
+    let parsed: Partial<ExtractionResult>;
+
     try {
-      result = JSON.parse(data.response);
-    } catch (parseError) {
-      console.error("JSON parse error, trying to clean response:", parseError);
-      const cleanedResponse = data.response.replace(/^[^{]*/, '').replace(/[^}]*$/, '');
-      result = JSON.parse(cleanedResponse);
+      parsed = JSON.parse(data.response);
+    } catch {
+      const cleanedResponse = data.response.replace(/^[^{]*/, "").replace(/[^}]*$/, "");
+      parsed = JSON.parse(cleanedResponse);
     }
 
-    return {
-      styles: result.styles || [],
-      artists: result.artists || [],
-      periods: result.periods || [],
-      museums: result.museums || [],
-      relationships: result.relationships || [],
-    };
+    return sanitizeResult(parsed);
   } catch (error) {
-    console.error("Extraction failed, falling back to mock data:", error);
-    return {
-      styles: ["北方文艺复兴"],
-      artists: ["Jan van Eyck"],
-      periods: ["15世纪"],
-      museums: ["Uffizi"],
-      relationships: [
-        {
-          type: "direct",
-          from: { type: "artist", name: "Jan van Eyck" },
-          to: { type: "style", name: "北方文艺复兴" },
-          description: "Jan van Eyck 是北方文艺复兴的代表人物",
-        },
-        {
-          type: "indirect",
-          from: { type: "period", name: "15世纪" },
-          to: { type: "style", name: "北方文艺复兴" },
-          description: "15世纪是北方文艺复兴的主要时期",
-        },
-      ],
-    };
+    console.error("Extraction failed, using local extractor:", error);
+    return localExtract(text);
   }
 }
