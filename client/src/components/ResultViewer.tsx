@@ -1,20 +1,42 @@
+import { useState } from "react";
 import type { ExtractResponse } from "../api";
-import { downloadFile } from "../api";
+import { downloadFile, exportToObsidian } from "../api";
 
 interface ResultViewerProps {
   result: ExtractResponse;
+  sourceText: string;
 }
 
-export function ResultViewer({ result }: ResultViewerProps) {
+const DEFAULT_VAULT_PATH = "/Users/vickyshou/Documents/Art Thinking Vault";
+
+export function ResultViewer({ result, sourceText }: ResultViewerProps) {
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+
   const handleDownloadAll = () => {
-    downloadFile(result.note.filename, result.note.content);
+    downloadFile(result.files.note.filename, result.files.note.content);
     result.files.entities.forEach((entity) => {
       downloadFile(entity.filename, entity.content);
     });
   };
 
   const handleCopyNote = () => {
-    navigator.clipboard.writeText(result.note.content);
+    navigator.clipboard.writeText(result.files.note.content);
+  };
+
+  const handleExportToObsidian = async () => {
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      const response = await exportToObsidian(sourceText, DEFAULT_VAULT_PATH);
+      setExportMessage(
+        `已导入 Obsidian：${response.exported.notePath}，实体文件 ${response.exported.entities.length} 个。`
+      );
+    } catch (error) {
+      setExportMessage(error instanceof Error ? error.message : "导入 Obsidian 失败");
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -34,8 +56,21 @@ export function ResultViewer({ result }: ResultViewerProps) {
           >
             下载全部
           </button>
+          <button
+            onClick={handleExportToObsidian}
+            disabled={exporting}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {exporting ? "导入中..." : "导入 Obsidian"}
+          </button>
         </div>
       </div>
+
+      {exportMessage && (
+        <div className="bg-purple-50 border border-purple-200 text-purple-700 p-3 rounded-lg text-sm">
+          {exportMessage}
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
         <h3 className="text-lg font-semibold text-gray-800">结构信息</h3>
@@ -79,14 +114,14 @@ export function ResultViewer({ result }: ResultViewerProps) {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-800">生成的笔记</h3>
           <button
-            onClick={() => downloadFile(result.note.filename, result.note.content)}
+            onClick={() => downloadFile(result.files.note.filename, result.files.note.content)}
             className="text-sm text-blue-600 hover:text-blue-800"
           >
             下载
           </button>
         </div>
         <pre className="bg-gray-50 p-4 rounded-lg text-sm overflow-auto max-h-96 whitespace-pre-wrap">
-          {result.note.content}
+          {result.files.note.content}
         </pre>
       </div>
 

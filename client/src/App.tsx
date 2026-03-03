@@ -8,6 +8,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ExtractResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastText, setLastText] = useState("");
 
   const handleSubmit = async (text: string) => {
     setLoading(true);
@@ -15,6 +16,7 @@ function App() {
     try {
       const data = await extractText(text);
       setResult(data);
+      setLastText(text);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -39,7 +41,7 @@ function App() {
         {!result ? (
           <TextInput onSubmit={handleSubmit} loading={loading} />
         ) : (
-          <ResultViewer result={result} />
+          <ResultViewer result={result} sourceText={lastText} />
         )}
       </main>
     </div>
