@@ -16,8 +16,8 @@ export function TextInput({ onSubmit, loading }: TextInputProps) {
   };
 
   return (
-    <div className="space-y-4">
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-3">
+      <form onSubmit={handleSubmit} className="space-y-3">
         <div>
           <label htmlFor="text-input" className="block text-xl text-white mb-2">
             输入艺术相关文本
@@ -27,14 +27,14 @@ export function TextInput({ onSubmit, loading }: TextInputProps) {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="粘贴关于艺术作品、艺术家、风格等的文本..."
-            className="w-full h-48 p-4 border border-white/10 rounded-2xl bg-white/5 text-white placeholder:text-white/40 resize-none focus:outline-none focus:border-white/20 transition"
+            className="h-48 w-full rounded-2xl border border-white/10 bg-white/5 p-4 text-white placeholder:text-white/40 resize-none transition focus:border-white/20 focus:outline-none"
             disabled={loading}
           />
         </div>
         <button
           type="submit"
           disabled={loading || !text.trim()}
-          className="w-full py-3 px-6 bg-white text-black rounded-2xl font-medium hover:opacity-90 disabled:bg-white/5 disabled:text-white/30 disabled:border disabled:border-white/10 disabled:cursor-not-allowed transition"
+          className="w-full rounded-2xl bg-white px-4 py-2 text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-white/10 disabled:bg-white/5 disabled:text-white/30"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">

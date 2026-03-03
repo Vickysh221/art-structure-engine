@@ -8,14 +8,14 @@ interface ResultViewerProps {
 
 export function ResultViewer({ result, onReset }: ResultViewerProps) {
   const handleDownloadAll = () => {
-    downloadFile(result.note.filename, result.note.content);
+    downloadFile(result.files.note.filename, result.files.note.content);
     result.files.entities.forEach((entity) => {
       downloadFile(entity.filename, entity.content);
     });
   };
 
   const handleCopyNote = () => {
-    navigator.clipboard.writeText(result.note.content);
+    navigator.clipboard.writeText(result.files.note.content);
   };
 
   const getRelationshipTypeColor = (type: string) => {
@@ -28,8 +28,8 @@ export function ResultViewer({ result, onReset }: ResultViewerProps) {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="space-y-3">
+      <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl text-white">抽取结果</h2>
         <div className="flex gap-2">
           <button
@@ -47,7 +47,7 @@ export function ResultViewer({ result, onReset }: ResultViewerProps) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
+      <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-3">
         <h3 className="text-lg text-white">结构信息</h3>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -112,25 +112,25 @@ export function ResultViewer({ result, onReset }: ResultViewerProps) {
         </div>
       )}
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg text-white">生成的笔记</h3>
           <button
-            onClick={() => downloadFile(result.note.filename, result.note.content)}
+            onClick={() => downloadFile(result.files.note.filename, result.files.note.content)}
             className="text-sm text-white/60 hover:text-white/80 transition"
           >
             下载
           </button>
         </div>
         <pre className="bg-black/20 p-3 rounded-xl text-sm overflow-auto max-h-96 whitespace-pre-wrap text-white/75">
-          {result.note.content}
+          {result.files.note.content}
         </pre>
       </div>
 
       <div className="space-y-3">
         <h3 className="text-lg text-white">生成的实体文件</h3>
         {result.files.entities.map((entity, i) => (
-          <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div key={i} className="rounded-2xl border border-white/10 bg-white/5 p-3">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <span className="text-sm text-white/60 mr-2">{entity.type}</span>
@@ -153,7 +153,7 @@ export function ResultViewer({ result, onReset }: ResultViewerProps) {
       <div className="pt-2">
         <button
           onClick={onReset}
-          className="w-full py-3 px-6 border border-white/10 bg-white/5 text-white/80 rounded-2xl hover:bg-white/10 transition"
+          className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-white/80 transition hover:bg-white/10"
         >
           返回输入
         </button>
