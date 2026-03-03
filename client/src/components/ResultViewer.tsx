@@ -11,8 +11,10 @@ interface ResultViewerProps {
 export function ResultViewer({ result, originalText, onReset }: ResultViewerProps) {
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const DEFAULT_VAULT_PATH = "/Users/vickyshou/Documents/Art Thinking Vault";
+  const [vaultPath, setVaultPath] = useState(DEFAULT_VAULT_PATH);
 
-  const VAULT_PATH = "/Users/vickyshou/Documents/Art Thinking Vault";
+  const canImport = vaultPath.trim().length > 0 && !importing;
 
   const handleImportToObsidian = async () => {
     setImporting(true);
@@ -20,10 +22,13 @@ export function ResultViewer({ result, originalText, onReset }: ResultViewerProp
     try {
       const response = await exportToObsidian(
         originalText,
-        VAULT_PATH
+        vaultPath.trim()
       );
+
+      const createdCount = response.exported.entities.filter((entity) => entity.status === "created").length;
+      const updatedCount = response.exported.entities.filter((entity) => entity.status === "updated").length;
       setImportStatus(
-        `✅ 成功导入！\n笔记: ${response.exported.notePath}\n实体文件: ${response.exported.entities.length} 个`
+        `✅ 成功导入！\n笔记: ${response.exported.notePath}\n实体文件: ${response.exported.entities.length} 个（新增 ${createdCount}，更新 ${updatedCount}）`
       );
     } catch (error) {
       setImportStatus(
@@ -73,7 +78,7 @@ export function ResultViewer({ result, originalText, onReset }: ResultViewerProp
           </button>
           <button
             onClick={handleImportToObsidian}
-            disabled={importing}
+            disabled={!canImport}
             className="px-4 py-2 bg-white text-black rounded-2xl font-medium hover:opacity-90 disabled:bg-white/5 disabled:text-white/30 disabled:cursor-not-allowed transition text-sm"
           >
             {importing ? (
@@ -89,6 +94,22 @@ export function ResultViewer({ result, originalText, onReset }: ResultViewerProp
             )}
           </button>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+        <label className="text-sm text-white/60" htmlFor="vaultPath">
+          Obsidian Vault 路径
+        </label>
+        <input
+          id="vaultPath"
+          value={vaultPath}
+          onChange={(event) => setVaultPath(event.target.value)}
+          placeholder="例如：/Users/yourname/Documents/MyVault"
+          className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+        />
+        <p className="mt-2 text-xs text-white/50">
+          导入会自动创建 styles / artists / periods / museums / notes 目录，并维护实体与笔记之间的双向链接。
+        </p>
       </div>
 
       {importStatus && (
