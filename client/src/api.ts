@@ -24,6 +24,20 @@ export interface ExtractResponse {
   files: GeneratedFiles;
 }
 
+export interface ExportResponse extends ExtractResponse {
+  exported: {
+    vaultPath: string;
+    notePath: string;
+    entities: Array<{
+      type: string;
+      filename: string;
+      content: string;
+      path: string;
+      status: "created" | "updated";
+    }>;
+  };
+}
+
 export async function extractText(text: string): Promise<ExtractResponse> {
   const response = await fetch(`${API_BASE}/extract`, {
     method: "POST",
@@ -35,6 +49,25 @@ export async function extractText(text: string): Promise<ExtractResponse> {
 
   if (!response.ok) {
     throw new Error("Failed to extract text");
+  }
+
+  return response.json();
+}
+
+export async function exportToObsidian(
+  text: string,
+  vaultPath: string
+): Promise<ExportResponse> {
+  const response = await fetch(`${API_BASE}/export`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text, vaultPath }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to export to Obsidian vault");
   }
 
   return response.json();
