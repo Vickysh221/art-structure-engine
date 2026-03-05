@@ -18,6 +18,93 @@ export function ResultViewer({ result, originalText, onReset }: ResultViewerProp
 
   const canImport = vaultPath.trim().length > 0 && !importing;
 
+  const ensureLocalVaultImportSupport = () => {
+    if (typeof window === "undefined" || typeof window.showDirectoryPicker !== "function") {
+      throw new Error("当前浏览器不支持本地目录授权（showDirectoryPicker）。请使用最新版 Chrome / Edge。\n\n你仍可使用后端导入或手动下载 md 文件导入 Obsidian。");
+    }
+  };
+
+  const normalizeNoteLink = (filename: string) => filename.replace(/\.md$/i, "");
+
+  const upsertEntityMarkdown = (existing: string, incoming: string, noteFilename: string) => {
+    const noteLink = `[[${normalizeNoteLink(noteFilename)}]]`;
+
+    if (existing.includes(noteLink)) {
+      return existing;
+    }
+
+    const trimmed = existing.trimEnd();
+    if (!trimmed) {
+      return `${incoming.trimEnd()}\n- ${noteLink}\n`;
+    }
+
+    return `${trimmed}\n- ${noteLink}\n`;
+  };
+
+  const writeTextFile = async (
+    dirHandle: FileSystemDirectoryHandle,
+    filename: string,
+    content: string
+  ) => {
+    const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(content);
+    await writable.close();
+  };
+
+  const importToLocalVault = async () => {
+    ensureLocalVaultImportSupport();
+
+    const picker = window.showDirectoryPicker;
+    if (!picker) {
+      throw new Error("当前浏览器不支持本地目录授权（showDirectoryPicker）。请使用最新版 Chrome / Edge。\n\n你仍可使用后端导入或手动下载 md 文件导入 Obsidian。");
+    }
+
+    const rootDir = await picker({
+      mode: "readwrite",
+      startIn: "documents",
+    });
+
+    const noteDir = await rootDir.getDirectoryHandle("notes", { create: true });
+    await writeTextFile(noteDir, result.files.note.filename, result.files.note.content);
+
+    const entityDirMap: Record<string, string> = {
+      style: "styles",
+      artist: "artists",
+      period: "periods",
+      museum: "museums",
+    };
+
+    let createdCount = 0;
+    let updatedCount = 0;
+
+    for (const entity of result.files.entities) {
+      const dirName = entityDirMap[entity.type] ?? "entities";
+      const entityDir = await rootDir.getDirectoryHandle(dirName, { create: true });
+      const fileHandle = await entityDir.getFileHandle(entity.filename, { create: true });
+      const existingFile = await fileHandle.getFile();
+      const existingContent = await existingFile.text();
+      const nextContent = upsertEntityMarkdown(existingContent, entity.content, result.files.note.filename);
+
+      if (existingContent.trim().length === 0) {
+        createdCount += 1;
+      } else {
+        updatedCount += 1;
+      }
+
+      const writable = await fileHandle.createWritable();
+      await writable.write(nextContent);
+      await writable.close();
+    }
+
+    return {
+      vaultName: rootDir.name,
+      createdCount,
+      updatedCount,
+      totalEntities: result.files.entities.length,
+    };
+  };
+
   const handleValidatePath = async () => {
     setCheckingPath(true);
     setPathCheckStatus(null);
@@ -35,16 +122,26 @@ export function ResultViewer({ result, originalText, onReset }: ResultViewerProp
     setImporting(true);
     setImportStatus(null);
     try {
-      const response = await exportToObsidian(
-        originalText,
-        vaultPath.trim()
-      );
+      try {
+        const localResult = await importToLocalVault();
+        setImportStatus(
+          `✅ 成功导入到本地 Vault：${localResult.vaultName}\n笔记: notes/${result.files.note.filename}\n实体文件: ${localResult.totalEntities} 个（新增 ${localResult.createdCount}，更新 ${localResult.updatedCount}）`
+        );
+        return;
+      } catch (localError) {
+        const localMessage = localError instanceof Error ? localError.message : "Unknown error";
 
-      const createdCount = response.exported.entities.filter((entity) => entity.status === "created").length;
-      const updatedCount = response.exported.entities.filter((entity) => entity.status === "updated").length;
-      setImportStatus(
-        `✅ 成功导入！\n笔记: ${response.exported.notePath}\n实体文件: ${response.exported.entities.length} 个（新增 ${createdCount}，更新 ${updatedCount}）`
-      );
+        const response = await exportToObsidian(
+          originalText,
+          vaultPath.trim()
+        );
+
+        const createdCount = response.exported.entities.filter((entity) => entity.status === "created").length;
+        const updatedCount = response.exported.entities.filter((entity) => entity.status === "updated").length;
+        setImportStatus(
+          `⚠️ 本地直连导入未成功，已切换后端导入。\n原因: ${localMessage}\n\n✅ 后端导入成功！\n笔记: ${response.exported.notePath}\n实体文件: ${response.exported.entities.length} 个（新增 ${createdCount}，更新 ${updatedCount}）`
+        );
+      }
     } catch (error) {
       setImportStatus(
         `❌ 导入失败: ${error instanceof Error ? error.message : "Unknown error"}`
