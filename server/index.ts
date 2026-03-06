@@ -212,6 +212,58 @@ app.post("/export", async (req, res) => {
   }
 });
 
+app.post("/export/obsidian-script", async (req, res) => {
+  try {
+    const { text, vaultName = "Art Thinking Vault" } = req.body as { text?: string; vaultName?: string };
+
+    if (!text) {
+      return res.status(400).json({ error: "Text is required" });
+    }
+
+    console.log('Obsidian script export request received:', {
+      textLength: text.length,
+      vaultName
+    });
+
+    const connectivity = await runConnectivityTest();
+    const extraction = await extractStructure(text);
+    const files = generateMarkdownFiles(text, extraction);
+
+    // 生成 MCP Obsidian 脚本
+    let script = `# Obsidian 导入脚本\n\nmcp\n`;
+
+    // 处理笔记文件
+    script += `mcp_mcp-obsidian_create-note {\n`;
+    script += `  "vault": "${vaultName}",\n`;
+    script += `  "filename": "${files.note.filename}",\n`;
+    script += `  "folder": "notes",\n`;
+    script += `  "content": "${files.note.content.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
+    script += `}\n\n`;
+
+    // 处理实体文件
+    for (const entity of files.entities) {
+      const entityDir = entityDirMap[entity.type as keyof typeof entityDirMap];
+      script += `mcp_mcp-obsidian_edit-note {\n`;
+      script += `  "vault": "${vaultName}",\n`;
+      script += `  "filename": "${entity.filename}",\n`;
+      script += `  "folder": "${entityDir}",\n`;
+      script += `  "operation": "replace",\n`;
+      script += `  "content": "${entity.content.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"\n`;
+      script += `}\n\n`;
+    }
+
+    res.json({
+      connectivity,
+      extraction,
+      files,
+      script
+    });
+  } catch (error) {
+    console.error('Obsidian script export error:', error);
+    res.status(500).json({ error: 'Failed to generate Obsidian script' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
