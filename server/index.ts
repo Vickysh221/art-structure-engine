@@ -42,29 +42,32 @@ function buildExportErrorPayload(error: unknown, vaultPath: string) {
   };
 }
 
-async function upsertEntityFile(
+async function upsertMarkdownFile(
   filePath: string,
-  content: string,
-  noteFilename: string
+  content: string
 ): Promise<"created" | "updated"> {
-  void noteFilename;
   try {
+    console.log("准备读取已存在文件:", filePath);
     const existing = await fs.readFile(filePath, "utf-8");
     const merged = mergeEntityMarkdown(existing, content);
 
     if (merged === existing) {
+      console.log("检测到内容无变化，跳过写入:", filePath);
       return "updated";
     }
 
-    const updated = merged;
-    await fs.writeFile(filePath, updated, "utf-8");
+    await fs.writeFile(filePath, merged, "utf-8");
+    console.log("文件已成功合并写入:", filePath);
     return "updated";
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.error("读取或合并文件失败:", { filePath, error });
       throw error;
     }
 
+    console.log("准备创建新文件:", filePath);
     await fs.writeFile(filePath, content, "utf-8");
+    console.log("文件已成功写入:", filePath);
     return "created";
   }
 }
@@ -174,8 +177,9 @@ app.post("/export", async (req, res) => {
     await Promise.all(dirs.map((dir) => fs.mkdir(path.join(normalizedVaultPath, dir), { recursive: true })));
 
     const notePath = path.join(normalizedVaultPath, "notes", files.note.filename);
-    await fs.writeFile(notePath, files.note.content, "utf-8");
-    console.log('Note written:', notePath);
+    console.log("准备写入路径:", notePath);
+    const noteStatus = await upsertMarkdownFile(notePath, files.note.content);
+    console.log("Note processed:", { path: notePath, status: noteStatus });
 
     const entityWrites = await Promise.all(
       files.entities.map(async (entity) => {
@@ -185,7 +189,7 @@ app.post("/export", async (req, res) => {
           path: entityPath,
           content: entity.content
         });
-        const status = await upsertEntityFile(entityPath, entity.content, files.note.filename);
+        const status = await upsertMarkdownFile(entityPath, entity.content);
         console.log('Entity processed:', { path: entityPath, status });
         return { ...entity, path: entityPath, status };
       })
@@ -198,6 +202,7 @@ app.post("/export", async (req, res) => {
       exported: {
         vaultPath: normalizedVaultPath,
         notePath,
+        noteStatus,
         entities: entityWrites,
       },
     });
