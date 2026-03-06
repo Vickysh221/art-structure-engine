@@ -7,11 +7,40 @@ function toKebabCase(str: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function generateNoteFilename(): string {
+function sanitizeFilenamePart(str: string): string {
+  return str
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function summarizeTextForFilename(text: string): string {
+  const cleaned = text
+    .replace(/^#+\s*/gm, "")
+    .replace(/[`*_~>\-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return "未命名笔记";
+  }
+
+  const hasChinese = /[\u4e00-\u9fff]/.test(cleaned);
+
+  if (hasChinese) {
+    return cleaned.slice(0, 10);
+  }
+
+  const words = cleaned.split(/\s+/).filter(Boolean).slice(0, 10);
+  return words.join(" ") || "Untitled Note";
+}
+
+function generateNoteFilename(text: string): string {
   const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10);
-  const randomStr = Math.random().toString(36).substr(2, 8);
-  return `${dateStr}-${randomStr}.md`;
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const summary = sanitizeFilenamePart(summarizeTextForFilename(text));
+  return `日记-${timestamp}-${summary}.md`;
 }
 
 function getRelationshipLabel(type: Relationship["type"]): string {
@@ -126,7 +155,7 @@ export function generateMarkdownFiles(
   text: string,
   extraction: ExtractionResult
 ): GeneratedFiles {
-  const noteFilename = generateNoteFilename();
+  const noteFilename = generateNoteFilename(text);
   const noteContent = generateNoteContent(text, extraction);
 
   const entities: GeneratedFiles["entities"] = [];
