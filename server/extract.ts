@@ -47,6 +47,120 @@ function uniq(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
+function normalizeUnknownPlaceholder(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "{未知}";
+  }
+
+  const normalized = trimmed
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[：:，,。.!！？?、;；"'`~\-_/()[\]]/g, "");
+
+  const exactPlaceholders = new Set([
+    "{未知}",
+    "未知",
+    "未提及",
+    "不详",
+    "未说明",
+    "未提供",
+    "未给出",
+    "暂无",
+    "无",
+    "无相关信息",
+    "none",
+    "unknown",
+    "na",
+    "n/a",
+    "null",
+    "nil",
+    "empty",
+  ]);
+
+  if (exactPlaceholders.has(normalized)) {
+    return "{未知}";
+  }
+
+  if (
+    /^(未提及|未知|不详|未说明|未提供|未给出|暂无|无)(具体)?(风格|艺术家|时期|展馆|博物馆)?$/i.test(trimmed)
+  ) {
+    return "{未知}";
+  }
+
+  if (/^(none|unknown|n\/a|null|nil)\s*(specific)?\s*(style|artist|period|museum)?$/i.test(trimmed)) {
+    return "{未知}";
+  }
+
+  if (/未提及具体(风格|艺术家|时期|展馆|博物馆)/.test(trimmed)) {
+    return "{未知}";
+  }
+
+  return trimmed;
+}
+
+function cleanEntityValue(value: string): string | null {
+  const normalized = normalizeUnknownPlaceholder(value);
+  if (normalized === "{未知}") {
+    return null;
+  }
+
+  return normalized;
+}
+
+function sanitizeEntityList(values?: string[]): string[] {
+  if (!values) {
+    return [];
+  }
+
+  const cleaned: string[] = [];
+  values.forEach((value) => {
+    const valid = cleanEntityValue(value);
+    if (valid) {
+      cleaned.push(valid);
+    }
+  });
+
+  return uniq(cleaned);
+}
+
+function sanitizeRelationships(relationships: Relationship[] | undefined): Relationship[] {
+  if (!relationships) {
+    return [];
+  }
+
+  const allowedTypes = new Set(["direct", "indirect", "many-to-many"]);
+  const allowedEntityTypes = new Set(["style", "artist", "period", "museum", "note"]);
+
+  return relationships
+    .filter((rel) => allowedTypes.has(rel.type))
+    .map((rel) => {
+      const fromName = cleanEntityValue(rel.from?.name ?? "");
+      const toName = cleanEntityValue(rel.to?.name ?? "");
+      if (!fromName || !toName) {
+        return null;
+      }
+      if (!allowedEntityTypes.has(rel.from?.type) || !allowedEntityTypes.has(rel.to?.type)) {
+        return null;
+      }
+
+      const description = rel.description?.trim();
+      return {
+        type: rel.type,
+        from: {
+          type: rel.from.type,
+          name: fromName,
+        },
+        to: {
+          type: rel.to.type,
+          name: toName,
+        },
+        ...(description ? { description } : {}),
+      } as Relationship;
+    })
+    .filter((rel): rel is Relationship => rel !== null);
+}
+
 function inferRelationships(result: ExtractionResult): Relationship[] {
   const relationships: Relationship[] = [];
 
@@ -133,11 +247,11 @@ function localExtract(text: string): ExtractionResult {
 
 function sanitizeResult(result: Partial<ExtractionResult>): ExtractionResult {
   const sanitized: ExtractionResult = {
-    styles: uniq(result.styles ?? []),
-    artists: uniq(result.artists ?? []),
-    periods: uniq(result.periods ?? []),
-    museums: uniq(result.museums ?? []),
-    relationships: result.relationships ?? [],
+    styles: sanitizeEntityList(result.styles),
+    artists: sanitizeEntityList(result.artists),
+    periods: sanitizeEntityList(result.periods),
+    museums: sanitizeEntityList(result.museums),
+    relationships: sanitizeRelationships(result.relationships),
   };
 
   if (sanitized.relationships.length === 0) {
@@ -145,6 +259,10 @@ function sanitizeResult(result: Partial<ExtractionResult>): ExtractionResult {
   }
 
   return sanitized;
+}
+
+export function sanitizeExtractionResult(result: Partial<ExtractionResult>): ExtractionResult {
+  return sanitizeResult(result);
 }
 
 export async function runConnectivityTest(): Promise<ConnectivityStatus> {
