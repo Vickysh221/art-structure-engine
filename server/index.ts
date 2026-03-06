@@ -150,22 +150,43 @@ app.post("/export", async (req, res) => {
     }
 
     const normalizedVaultPath = vaultPath.trim();
+    console.log('Export request received:', {
+      textLength: text.length,
+      vaultPath: normalizedVaultPath
+    });
 
     const connectivity = await runConnectivityTest();
     const extraction = await extractStructure(text);
+    console.log('Extraction result:', {
+      styles: extraction.styles,
+      artists: extraction.artists,
+      periods: extraction.periods,
+      relationships: extraction.relationships.length
+    });
+
     const files = generateMarkdownFiles(text, extraction);
+    console.log('Generated files:', {
+      note: files.note.filename,
+      entities: files.entities.map(e => ({ type: e.type, filename: e.filename }))
+    });
 
     const dirs = ["styles", "artists", "periods", "museums", "notes"];
     await Promise.all(dirs.map((dir) => fs.mkdir(path.join(normalizedVaultPath, dir), { recursive: true })));
 
     const notePath = path.join(normalizedVaultPath, "notes", files.note.filename);
     await fs.writeFile(notePath, files.note.content, "utf-8");
+    console.log('Note written:', notePath);
 
     const entityWrites = await Promise.all(
       files.entities.map(async (entity) => {
         const entityDir = entityDirMap[entity.type as keyof typeof entityDirMap];
         const entityPath = path.join(normalizedVaultPath, entityDir, entity.filename);
+        console.log('Processing entity:', {
+          path: entityPath,
+          content: entity.content
+        });
         const status = await upsertEntityFile(entityPath, entity.content, files.note.filename);
+        console.log('Entity processed:', { path: entityPath, status });
         return { ...entity, path: entityPath, status };
       })
     );
@@ -181,7 +202,7 @@ app.post("/export", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error('Export error:', error);
     res.status(500).json(buildExportErrorPayload(error, (req.body as { vaultPath?: string }).vaultPath ?? ""));
   }
 });
